@@ -1,0 +1,10 @@
+# 仓库内统一以 LF 存储文本文件，工作区的 CRLF 不再被视为改动
+* text=auto
+
+# Windows 批处理必须使用 CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+*.exe binary
+*.jpg binary
+*.png binary

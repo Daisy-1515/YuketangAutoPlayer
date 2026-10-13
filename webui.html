@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雨课堂自动播放</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1d2330;
+    --muted: #6b7385;
+    --line: #e3e6ec;
+    --accent: #2f6fde;
+    --accent-text: #ffffff;
+    --ok: #1f8a4c;
+    --ok-bg: #e5f5ec;
+    --warn: #a86400;
+    --warn-bg: #fdf1dc;
+    --err: #c62f3a;
+    --err-bg: #fce8ea;
+    --log-bg: #0f1420;
+    --log-text: #cfd6e4;
+    --track: #e6e9ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c;
+      --card: #1b1f29;
+      --text: #e6e9f0;
+      --muted: #8f97a8;
+      --line: #2b3140;
+      --accent: #5b8ff0;
+      --accent-text: #0b0f18;
+      --ok: #5cc98a;
+      --ok-bg: #173323;
+      --warn: #f0b45a;
+      --warn-bg: #3a2c14;
+      --err: #f2737d;
+      --err-bg: #3d1a1f;
+      --log-bg: #0b0e14;
+      --log-text: #c3cad8;
+      --track: #2b3140;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+          background: var(--accent); color: var(--accent-text); font-size: 12px; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row + .row { margin-top: 10px; }
+  label.field { color: var(--muted); font-size: 13px; min-width: 64px; }
+  input[type=text] {
+    flex: 1 1 260px; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--card);
+    color: var(--text); font: inherit; cursor: pointer; white-space: nowrap;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.danger { color: var(--err); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .badge.err { background: var(--err-bg); color: var(--err); }
+  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .notice { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); }
+  .notice:empty { display: none; }
+  .switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .now { font-weight: 600; word-break: break-all; }
+  .bar { height: 8px; background: var(--track); border-radius: 999px; overflow: hidden; margin: 8px 0 6px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .6s ease; }
+  .now-item + .now-item { margin-top: 14px; }
+  .now .badge { margin-left: 6px; vertical-align: 1px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  details { margin-top: 12px; }
+  summary { color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
+  details > .row { margin-top: 10px; }
+  select {
+    padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .card-head h2 { margin: 0; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; max-height: 360px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-size: 12px; font-weight: 500; background: var(--card); position: sticky; top: 0; }
+  tr:last-child td { border-bottom: none; }
+  tr.selected td { background: var(--ok-bg); }
+  td.course-name { font-weight: 500; min-width: 160px; }
+  td.sub { color: var(--muted); font-size: 13px; }
+  td.op { text-align: right; width: 1%; }
+  .empty { padding: 24px 12px; text-align: center; color: var(--muted); }
+  .shot { margin-top: 12px; max-width: 100%; border-radius: 6px; border: 1px solid var(--line); display: none; }
+  pre#log {
+    margin: 0; height: 280px; overflow: auto; padding: 12px; border-radius: 6px;
+    background: var(--log-bg); color: var(--log-text); font: 12px/1.55 ui-monospace, Consolas, "Cascadia Mono", monospace;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100% - 32px);
+    padding: 10px 16px; border-radius: 8px; background: var(--err); color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  #toast.show { opacity: 1; }
+  #toast.ok { background: var(--ok); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>雨课堂视频自动播放</h1>
+    <span id="conn" class="badge ok">已连接</span>
+  </header>
+
+  <section class="card">
+    <h2><span class="step">1</span>登录 <span id="cookieBadge" class="badge warn">未登录</span></h2>
+    <div class="row">
+      <button class="primary" id="btnQr">扫码登录</button>
+      <button class="danger" id="btnCancel">取消登录</button>
+    </div>
+    <p class="hint">点击后会弹出一个 Chrome 窗口，用微信扫码即可。登录成功后浏览器会自动关闭，登录态会保存下来，下次打开不用再扫。</p>
+    <details id="platformBox">
+      <summary>不是普通雨课堂？切换到荷塘 / 长江 / 黄河雨课堂</summary>
+      <div class="row">
+        <label class="field" for="platform">平台</label>
+        <select id="platform">
+          <option value="www.yuketang.cn">雨课堂（大多数学校）</option>
+          <option value="pro.yuketang.cn">荷塘雨课堂</option>
+          <option value="changjiang.yuketang.cn">长江雨课堂</option>
+          <option value="huanghe.yuketang.cn">黄河雨课堂</option>
+          <option value="other">其他域名</option>
+        </select>
+        <input type="text" id="customHost" placeholder="例如 grsbupt.yuketang.cn" spellcheck="false" hidden>
+      </div>
+    </details>
+    <div class="notice" id="loginMsg"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2><span class="step">2</span>选择课程</h2>
+      <button id="btnRefresh">刷新列表</button>
+    </div>
+    <div class="table-wrap">
+      <table id="courseTable">
+        <thead><tr><th>课程</th><th>班级</th><th>老师</th><th></th></tr></thead>
+        <tbody id="courseRows"></tbody>
+      </table>
+      <div class="empty" id="courseEmpty"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label class="switch"><input type="checkbox" id="headless">无窗口模式（不弹出播放浏览器）</label>
+    </div>
+    <div class="row">
+      <label class="field" for="parallel">同时播放</label>
+      <select id="parallel">
+        <option value="1">1 个视频（逐个播放）</option>
+        <option value="2">2 个视频</option>
+        <option value="3">3 个视频</option>
+        <option value="4">4 个视频</option>
+        <option value="5">5 个视频</option>
+      </select>
+    </div>
+    <p class="hint">所有视频都以 2 倍速播放（雨课堂允许的最高倍速）。老师开启了防刷的视频切到后台会被暂停，这类视频会单独播放。</p>
+    <details>
+      <summary>列表里没有要刷的课？手动填写课程地址</summary>
+      <div class="row">
+        <input type="text" id="course" placeholder="https://www.yuketang.cn/v2/web/studentLog/..." spellcheck="false">
+        <button id="btnSaveCourse">保存地址</button>
+      </div>
+      <p class="hint">在雨课堂网页中进入课程的「学习内容」页，复制浏览器地址栏里的地址粘贴到这里。</p>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">3</span>播放 <span id="playBadge" class="badge warn">未开始</span></h2>
+    <div class="row">
+      <button class="primary" id="btnStart">开始播放</button>
+      <button class="danger" id="btnStop">停止</button>
+    </div>
+    <div id="nowList" style="margin-top:14px; display:none"></div>
+    <img class="shot" id="shot" alt="播放页面截图">
+    <p class="hint">播放时尽量不要把鼠标移到弹出的浏览器窗口上，程序靠模拟鼠标操作调整倍速和静音。播放开启了防刷的视频时，弹出的浏览器窗口要保持在前台。</p>
+  </section>
+
+  <section class="card">
+    <h2>运行日志</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let since = 0;
+let lastShot = 0;
+let state = null;
+const synced = {};  // 输入框最近一次从服务端同步的值，避免覆盖用户正在输入的内容
+
+function toast(text, ok) {
+  const el = $('toast');
+  el.textContent = text;
+  el.className = ok ? 'ok show' : 'show';
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+
+function action(button, fn) {
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try { await fn(); await refresh(); }
+    catch (error) { toast(error.message); }
+    finally { button.disabled = false; render(); }
+  });
+}
+
+function syncInput(input, value) {
+  if (document.activeElement === input) return;
+  if (synced[input.id] !== value) {
+    input.value = value;
+    synced[input.id] = value;
+  }
+}
+
+function fmt(seconds) {
+  if (!isFinite(seconds)) return '--:--';
+  seconds = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
+  const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function setBadge(el, cls, text) {
+  el.className = 'badge ' + cls;
+  el.textContent = text;
+}
+
+let platformSynced = false;
+function syncPlatform(host) {
+  // 只在首次加载时根据已保存的域名选中平台，之后以用户的选择为准
+  if (platformSynced) return;
+  platformSynced = true;
+  const known = [...$('platform').options].some((option) => option.value === host);
+  $('platform').value = known ? host : 'other';
+  if (!known) $('customHost').value = host;
+  $('customHost').hidden = known;
+  if (host !== 'www.yuketang.cn') $('platformBox').open = true;
+}
+
+function loginHost() {
+  return $('platform').value === 'other' ? $('customHost').value.trim() : $('platform').value;
+}
+
+function classroomOf(url) {
+  const match = /\/studentLog\/(\d+)/.exec(url || '');
+  return match ? match[1] : '';
+}
+
+let courseKey = '';
+function renderCourses(settings, courses, player, loginOpen) {
+  const selected = classroomOf(settings.course_url);
+  const key = JSON.stringify([courses.items, selected, player.running]);
+  if (key !== courseKey) {
+    courseKey = key;
+    const rows = courses.items.map((item) => {
+      const tr = document.createElement('tr');
+      const isSelected = item.classroom_id === selected;
+      if (isSelected) tr.className = 'selected';
+      const cells = [
+        [item.name || item.classroom, 'course-name'],
+        [item.classroom, 'sub'],
+        [item.teacher, 'sub'],
+      ];
+      for (const [text, cls] of cells) {
+        const td = document.createElement('td');
+        td.className = cls;
+        td.textContent = text;
+        tr.appendChild(td);
+      }
+      const td = document.createElement('td');
+      td.className = 'op';
+      const button = document.createElement('button');
+      button.textContent = isSelected ? '已选择' : '选这门课';
+      if (!isSelected) button.className = 'primary';
+      button.disabled = isSelected || player.running;
+      action(button, async () => {
+        await post('/api/settings', { course_url: item.url });
+        synced.course = null;
+        toast('已选择课程：' + (item.name || item.classroom), true);
+      });
+      td.appendChild(button);
+      tr.appendChild(td);
+      return tr;
+    });
+    $('courseRows').replaceChildren(...rows);
+  }
+  let empty = '';
+  if (!courses.items.length) {
+    if (courses.loading) empty = '正在读取课程列表...';
+    else if (loginOpen && (!settings.has_cookie || courses.expired)) empty = '已打开扫码窗口，请用微信扫码登录，登录后这里会列出你的课程';
+    else if (!settings.has_cookie) empty = '请先在上一步扫码登录，登录后这里会列出你的课程';
+    else empty = courses.error || '正在读取课程列表...';
+  } else if (courses.error) {
+    empty = courses.error;
+  }
+  $('courseTable').hidden = !courses.items.length;
+  $('courseEmpty').textContent = empty;
+  $('courseEmpty').hidden = !empty;
+}
+
+function render() {
+  if (!state) return;
+  const { settings, login, player, status, courses } = state;
+  const loginOpen = login.state !== 'idle';
+
+  syncPlatform(settings.host);
+  syncInput($('course'), settings.course_url);
+  $('headless').checked = settings.headless;
+  syncInput($('parallel'), String(settings.parallel));
+
+  if (!settings.has_cookie) setBadge($('cookieBadge'), 'warn', '未登录');
+  else if (courses.expired) setBadge($('cookieBadge'), 'err', '登录已失效，请重新扫码');
+  else setBadge($('cookieBadge'), 'ok', '已登录');
+  $('loginMsg').textContent = login.message;
+  $('btnQr').disabled = loginOpen || player.running;
+  $('btnCancel').disabled = !loginOpen || login.state === 'starting';
+  $('btnRefresh').disabled = courses.loading || !settings.has_cookie;
+  renderCourses(settings, courses, player, loginOpen);
+  $('btnSaveCourse').disabled = player.running;
+  $('headless').disabled = player.running;
+  $('parallel').disabled = player.running;
+  $('btnStart').disabled = player.running || loginOpen || !settings.course_url;
+  $('btnStop').disabled = !player.running;
+
+  if (player.running) setBadge($('playBadge'), 'ok', '播放中');
+  else if (player.exit_code === null) setBadge($('playBadge'), 'warn', '未开始');
+  else if (player.exit_code === 0) setBadge($('playBadge'), 'ok', '已结束');
+  else if (player.stopped) setBadge($('playBadge'), 'warn', '已手动停止');
+  else setBadge($('playBadge'), 'err', `已停止（代码 ${player.exit_code}）`);
+
+  renderVideos(status ? status.videos : []);
+
+  if (state.screenshot && state.screenshot !== lastShot) {
+    lastShot = state.screenshot;
+    $('shot').src = '/api/screenshot?t=' + lastShot;
+    $('shot').style.display = 'block';
+  } else if (!state.screenshot) {
+    $('shot').style.display = 'none';
+  }
+}
+
+function videoRow() {
+  const row = document.createElement('div');
+  row.className = 'now-item';
+  row.innerHTML = '<div class="now"><span></span><span class="badge warn" hidden>防刷·单独播放</span></div>'
+    + '<div class="bar"><div></div></div>'
+    + '<div class="meta"><span></span><span></span><span></span></div>';
+  return row;
+}
+
+function renderVideos(videos) {
+  const list = $('nowList');
+  list.style.display = videos.length ? '' : 'none';
+  while (list.children.length > videos.length) list.lastChild.remove();
+  while (list.children.length < videos.length) list.appendChild(videoRow());
+  videos.forEach((video, i) => {
+    const row = list.children[i];
+    const [name, anti] = row.querySelector('.now').children;
+    const [time, rate, muted] = row.querySelector('.meta').children;
+    const pct = video.duration ? Math.min(100, video.current_time / video.duration * 100) : 0;
+    name.textContent = video.video || '';
+    anti.hidden = !video.anti_brushing;
+    row.querySelector('.bar > div').style.width = pct.toFixed(1) + '%';
+    time.textContent = `${fmt(video.current_time)} / ${fmt(video.duration)}（${pct.toFixed(0)}%）`;
+    rate.textContent = `${video.rate} 倍速`;
+    muted.textContent = video.muted ? '已静音' : '未静音';
+  });
+}
+
+function appendLogs(lines) {
+  if (!lines.length) return;
+  const el = $('log');
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+  el.textContent += lines.map((line) => line[1]).join('\n') + '\n';
+  if (el.textContent.length > 200000) el.textContent = el.textContent.slice(-150000);
+  since = lines[lines.length - 1][0];
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+async function refresh() {
+  const response = await fetch('/api/state?since=' + since);
+  state = await response.json();
+  appendLogs(state.logs);
+  render();
+}
+
+async function poll() {
+  try {
+    await refresh();
+    setBadge($('conn'), 'ok', '已连接');
+  } catch (error) {
+    setBadge($('conn'), 'err', '已断开，请重新运行程序');
+  }
+  setTimeout(poll, 1000);
+}
+
+action($('btnQr'), () => post('/api/login', { host: loginHost() }));
+action($('btnCancel'), () => post('/api/login/cancel'));
+action($('btnRefresh'), () => post('/api/courses/refresh'));
+action($('btnSaveCourse'), async () => {
+  await post('/api/settings', { course_url: $('course').value });
+  synced.course = null;
+  toast('课程地址已保存', true);
+});
+$('platform').addEventListener('change', () => {
+  $('customHost').hidden = $('platform').value !== 'other';
+});
+action($('btnStart'), () => post('/api/player/start'));
+action($('btnStop'), () => post('/api/player/stop'));
+$('headless').addEventListener('change', async (event) => {
+  try { await post('/api/settings', { headless: event.target.checked }); await refresh(); }
+  catch (error) { toast(error.message); }
+});
+$('parallel').addEventListener('change', async (event) => {
+  try { await post('/api/settings', { parallel: Number(event.target.value) }); await refresh(); }
+  catch (error) { toast(error.message); }
+});
+
+poll();
+</script>
+</body>
+</html>

@@ -16,6 +16,18 @@
 
 ## 使用方法
 
+### 图形界面（推荐）
+
+不用再去开发者工具里找 Cookie，也不用手动复制课程地址：
+
+1. 安装依赖（`uv pip install selenium`），Windows 下双击 `start.cmd`，或运行 `python webui.py`
+2. 浏览器会自动打开本地控制台（`http://127.0.0.1:8765/`）
+3. 点「扫码登录」，在弹出的 Chrome 中用微信扫码，登录成功后浏览器自动关闭，登录态保存到 `config.ini`
+4. 控制台会列出你的所有课程，在要刷的课后面点「选这门课」
+5. 点「开始播放」，控制台会显示当前视频、进度条、截图和运行日志；随时可以点「停止」
+
+默认登录普通雨课堂（www.yuketang.cn）；荷塘、长江、黄河雨课堂或学校独立域名，在登录卡片里展开「不是普通雨课堂？」选择即可。列表里没有的课，可以展开「手动填写课程地址」粘贴课程「学习内容」页的地址。登录态失效后重新点「扫码登录」即可。自行打包的 exe（见下文「打包为 EXE」）双击后同样会打开这个控制台。
+
 ### 方式一：使用打包好的 exe 文件（推荐）
 
 1. 下载最新版本的 [`YuketangAutoPlayer.exe`](https://github.com/LetMeFly666/YuketangAutoPlayer/releases/download/v5.0/YuketangAutoPlayer.exe)
@@ -67,6 +79,7 @@ headless = false
 course_url = 在此填写你的课程URL
 cookie = 在此填写你的sessionid
 implicitly_wait = 10
+parallel = 3
 ```
 
 #### ① headless
@@ -87,6 +100,8 @@ implicitly_wait = 10
 
 #### ③ cookie
 
+**推荐使用上面的[图形界面](#图形界面推荐)扫码登录，登录态会自动保存，以下手动方式可跳过。**
+
 **若你觉得COOKIE的获取比较麻烦，你可以选择[跳过这一步](#四开始刷课)并每次重新扫码登录。**扫码登录不支持HEADLESS模式。
 
 COOKIE用来告诉雨课堂你是你。获取方式如下：
@@ -94,6 +109,12 @@ COOKIE用来告诉雨课堂你是你。获取方式如下：
 登录（你们学校的）雨课堂，`打开开发者工具`（下图的步骤1，也可百度），依次点击"应用→存储→Cookie→ https&#58;&#47;&#47;xxx.yuketang... "，复制**sessionid**对应的值
 
 ![/how-to-get-cookie](img/how-to-get-cookie.jpg)
+
+#### ④ parallel
+
+同时播放的视频数（1~5，默认 3），设为 1 即逐个播放。所有视频都以 2 倍速播放（雨课堂播放器允许的最高倍速）。
+
+老师开启了「防刷」的视频在页面切到后台或窗口失去焦点时会被暂停，这类视频会单独播放，有窗口模式下播放时请让浏览器窗口保持在前台。若课程里的视频都开启了防刷，则仍是逐个播放。
 
 ### 四、开始刷课
 
@@ -141,7 +162,7 @@ pyinstaller YuketangAutoPlayer.spec --clean
 
 ## TODO
 
-- [ ] 抽象一个获取待播放视频的函数([Suggest](https://github.com/LetMeFly666/YuketangAutoPlayer/pull/17#discussion_r2450825512)ed by Copilot)。
+- [ ] 抽象获取待播放视频的函数，见[建议](https://github.com/LetMeFly666/YuketangAutoPlayer/pull/17#discussion_r2450825512)。
 
 
 ## 免责声明

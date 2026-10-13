@@ -162,3 +162,8 @@ cython_debug/
 # 项目特定配置
 config.ini
 chromedriver.exe
+# 本地配置临时文件与运行产物
+config.ini.tmp
+.playwright-cli/
+output/
+*.pid

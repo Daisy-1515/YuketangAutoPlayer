@@ -3,13 +3,15 @@
 block_cipher = None
 
 a = Analysis(
-    ['main.py'],
+    ['webui.py'],
     pathex=[],
     binaries=[
         ('chromedriver.exe', '.'),  # 打包 chromedriver.exe 到根目录
     ],
-    datas=[],
-    hiddenimports=[],
+    datas=[
+        ('webui.html', '.'),  # 网页控制台页面
+    ],
+    hiddenimports=['main'],  # 播放子进程通过 --player 动态导入
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -36,7 +38,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # 保留控制台窗口以显示日志
+    console=True,  # 保留控制台窗口，关闭即退出
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
