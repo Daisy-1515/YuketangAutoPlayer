@@ -23,26 +23,34 @@
 
 ## 快速开始
 
-### 1. 准备环境
+### 1. Windows 一键启动（推荐）
 
-- 安装 [Chrome 浏览器](https://www.google.cn/chrome/index.html)
-- 下载与 Chrome **版本对应的** [`chromedriver.exe`](https://googlechromelabs.github.io/chrome-for-testing/)，放到项目根目录（或加入 `PATH`）
-- 安装 Python 3.8+ 和依赖：
+1. 安装 [Chrome 浏览器](https://www.google.cn/chrome/)
+2. 下载本项目（`git clone` 或在 GitHub 页面点 Code → Download ZIP 后解压）
+3. 双击 **`start.cmd`**
+
+**不需要提前安装 Python。** 第一次运行时，`start.cmd` 会自动调用 `install.cmd` 准备环境：
+
+- 没有 [uv](https://docs.astral.sh/uv/) 时自动安装
+- 电脑上没有合适的 Python 时，由 uv 自动下载（不影响电脑上已有的 Python）
+- 在项目目录创建 `.venv` 虚拟环境并安装 selenium
+- 检查是否装了 Chrome
+
+访问 GitHub 或 PyPI 失败时，脚本会自动改用国内镜像（清华 PyPI、npmmirror）重试。环境装好后再双击 `start.cmd` 会直接打开控制台。之后如果环境坏了，可以单独双击 `install.cmd` 重新检查和修复。
+
+项目目录里没有 `chromedriver.exe` 时，selenium 会在首次运行时自动下载与 Chrome 匹配的版本。如果下载失败，请手动下载[对应版本的 chromedriver](https://googlechromelabs.github.io/chrome-for-testing/) 放到项目目录。
+
+### 2. 手动安装（其他系统，或想自己管理环境）
+
+需要 Chrome 和 Python 3.9+：
 
 ```bash
 uv venv
 uv pip install selenium      # 不用 uv 的话：pip install selenium
-```
-
-### 2. 启动控制台
-
-Windows 下双击 `start.cmd`（使用项目内的 `.venv`），或者：
-
-```bash
 python webui.py              # 加 --no-browser 不自动打开页面
 ```
 
-浏览器会自动打开 `http://127.0.0.1:8765/`（端口被占用时会换一个，以命令行窗口里打印的地址为准）。
+控制台地址是 `http://127.0.0.1:8765/`，会自动在浏览器中打开；端口被占用时会换一个，以命令行窗口里打印的地址为准。
 
 ### 3. 三步开始播放
 
@@ -125,7 +133,8 @@ webui.py          网页控制台后端（标准库 HTTP 服务，仅监听 127.
 webui.html        控制台页面
 main.py           播放脚本：查找未完成视频、多开调度、倍速与续播控制
 common.py         共用逻辑：配置读写、启动 Chrome、扫码登录、读取课程列表
-start.cmd         Windows 一键启动
+start.cmd         Windows 一键启动（环境缺失时自动调用 install.cmd）
+install.cmd       Windows 环境安装入口，实际逻辑在 install.ps1（安装 uv、Python、selenium）
 tests/            回归检查与本地浏览器检查
 output/           运行时生成的播放状态和截图，可随时删除
 ```
