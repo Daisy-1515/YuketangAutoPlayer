@@ -174,7 +174,7 @@
         <option value="5">5 个视频</option>
       </select>
     </div>
-    <p class="hint">所有视频都以 2 倍速播放（雨课堂允许的最高倍速）。老师开启了防刷的视频切到后台会被暂停，这类视频会单独播放。</p>
+    <p class="hint">所有视频都以 2 倍速播放，始终按所选数量同时播放；暂停后自动续播。</p>
     <details>
       <summary>列表里没有要刷的课？手动填写课程地址</summary>
       <div class="row">
@@ -193,7 +193,7 @@
     </div>
     <div id="nowList" style="margin-top:14px; display:none"></div>
     <img class="shot" id="shot" alt="播放页面截图">
-    <p class="hint">播放时尽量不要把鼠标移到弹出的浏览器窗口上，程序靠模拟鼠标操作调整倍速和静音。播放开启了防刷的视频时，弹出的浏览器窗口要保持在前台。</p>
+    <p class="hint">播放时尽量不要把鼠标移到弹出的浏览器窗口上，程序靠模拟鼠标操作调整倍速和静音。</p>
   </section>
 
   <section class="card">
@@ -376,7 +376,7 @@ function render() {
 function videoRow() {
   const row = document.createElement('div');
   row.className = 'now-item';
-  row.innerHTML = '<div class="now"><span></span><span class="badge warn" hidden>防刷·单独播放</span></div>'
+  row.innerHTML = '<div class="now"><span></span></div>'
     + '<div class="bar"><div></div></div>'
     + '<div class="meta"><span></span><span></span><span></span></div>';
   return row;
@@ -389,13 +389,13 @@ function renderVideos(videos) {
   while (list.children.length < videos.length) list.appendChild(videoRow());
   videos.forEach((video, i) => {
     const row = list.children[i];
-    const [name, anti] = row.querySelector('.now').children;
+    const name = row.querySelector('.now > span');
     const [time, rate, muted] = row.querySelector('.meta').children;
     const pct = video.duration ? Math.min(100, video.current_time / video.duration * 100) : 0;
     name.textContent = video.video || '';
-    anti.hidden = !video.anti_brushing;
     row.querySelector('.bar > div').style.width = pct.toFixed(1) + '%';
-    time.textContent = `${fmt(video.current_time)} / ${fmt(video.duration)}（${pct.toFixed(0)}%）`;
+    const remaining = (video.duration - video.current_time) / (video.rate || 1);
+    time.textContent = `${fmt(video.current_time)} / ${fmt(video.duration)}（${pct.toFixed(0)}%）· 还剩约 ${fmt(remaining)}`;
     rate.textContent = `${video.rate} 倍速`;
     muted.textContent = video.muted ? '已静音' : '未静音';
   });

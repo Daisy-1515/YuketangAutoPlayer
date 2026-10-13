@@ -56,7 +56,7 @@ def create_config_template(path):
             f.write(';             例如: https://www.yuketang.cn/v2/web/studentLog/12345678\n')
             f.write('; cookie: 你的sessionid值，可在图形界面中扫码登录自动获取\n')
             f.write('; implicitly_wait: 元素查找超时时间(秒)，一般不需要修改\n')
-            f.write('; parallel: 同时播放的视频数(1-5)，1 为逐个播放；开启了防刷的视频总是单独播放\n\n')
+            f.write('; parallel: 同时播放的视频数(1-5)，1 为逐个播放；所有视频统一按此数量调度\n\n')
             config.write(f)
     except Exception as e:
         print(f'创建配置文件失败: {e}')
@@ -106,6 +106,10 @@ def update_settings(values):
 
 def make_driver(headless=False):
     option = webdriver.ChromeOptions()
+    # 多个播放页在后台也需要及时执行续播和倍速维护。
+    option.add_argument('--disable-background-timer-throttling')
+    option.add_argument('--disable-renderer-backgrounding')
+    option.add_argument('--disable-backgrounding-occluded-windows')
     if headless:
         option.add_argument('--headless=new')
         # 无窗口时 maximize 只有约 800x600，播放器的倍速按钮会落在视口外点不到

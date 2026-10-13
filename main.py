@@ -5,7 +5,8 @@ LastEditors: LetMeFly.xyz
 LastEditTime: 2025-11-13 22:44:00
 Description: 开源于https://github.com/LetMeFly666/YuketangAutoPlayer 欢迎issue、PR
 '''
-from selenium.common.exceptions import ElementNotInteractableException, WebDriverException
+from selenium.common.exceptions import (ElementNotInteractableException, NoSuchFrameException,
+                                        StaleElementReferenceException, WebDriverException)
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -90,7 +91,7 @@ print(f'\n配置信息:')
 print(f'  无窗口模式: {IF_HEADLESS}')
 print(f'  课程URL: {COURSE_URL[:50]}...' if len(COURSE_URL) > 50 else f'  课程URL: {COURSE_URL}')
 print(f'  Cookie已配置: {"✓" if COOKIE else "✗（将扫码登录）"}')
-print(f'  同时播放: {PARALLEL} 个视频（开启了防刷的视频单独播放）')
+print(f'  同时播放: {PARALLEL} 个视频，统一使用 2 倍速')
 print('='*50 + '\n')
 
 
@@ -219,7 +220,7 @@ def change2speed2():
         sleep(1)
         if driver.execute_script('return video.playbackRate;') == 2:
             return True
-    print('未能切换到 2 倍速，将以当前倍速播放')
+    print('倍速菜单切换失败，将直接维持 2 倍速')
     return False
 
 
@@ -288,9 +289,9 @@ def open_video(video: WebElement):
         click(video.find_element(By.TAG_NAME, 'span'))
     else:
         click(video)
-    WebDriverWait(driver, 30).until(
+    wait_for_playback(
         lambda d: set(d.window_handles) - previous_windows
-        or d.find_elements(By.TAG_NAME, 'video')
+        or find_video(d)
     )
     new_windows = set(driver.window_handles) - previous_windows
     if not new_windows:
@@ -302,83 +303,126 @@ def open_video(video: WebElement):
 
 
 def activate(handle):
-    """切到该标签页并放到前台（模拟鼠标操作和防刷检查都要求页面在前台）。"""
+    """切到该标签页并放到前台，供模拟鼠标操作使用。"""
     driver.switch_to.window(handle)
     driver.execute_cdp_cmd('Page.bringToFront', {})
 
 
+def find_video(browser):
+    """寻找页面或学习内容 iframe 内的播放器，保留对应的 iframe 上下文。"""
+    browser.switch_to.default_content()
+    query = 'video = document.querySelector("video"); return video;'
+    video = browser.execute_script(query)
+    if video:
+        return video
+    for frame in browser.find_elements(By.TAG_NAME, 'iframe'):
+        browser.switch_to.frame(frame)
+        video = browser.execute_script(query)
+        if video:
+            return video
+        browser.switch_to.default_content()
+    return None
+
+
+def wait_for_playback(predicate, timeout=30):
+    """显式等待时关闭隐式等待，避免不存在的 iframe 耗尽整个等待期限。"""
+    driver.implicitly_wait(0)
+    try:
+        return WebDriverWait(driver, timeout, ignored_exceptions=(
+            StaleElementReferenceException, NoSuchFrameException,
+        )).until(predicate, message=f'视频页面或播放器未在 {timeout} 秒内加载，请检查网络和登录状态')
+    finally:
+        driver.implicitly_wait(IMPLICITLY_WAIT)
+
+
 def wait_video():
-    WebDriverWait(driver, 10).until(lambda x: driver.execute_script('video = document.querySelector("video"); console.log(video); return video;'))  # 这里即使2次sleep3s选中的video还是null
-
-
-def is_anti_brushing():
-    """老师是否给该视频开启了防刷（页面隐藏或失焦即暂停）；读不到时按开启处理，只单独播放。"""
-    return driver.execute_script('const p = document.querySelector(".xtplayer");'
-                                 'return !(p && p.__vue__ && p.__vue__.isAntiBrushing === false);')
+    return wait_for_playback(find_video)
 
 
 def start_playback():
-    """在当前页开始播放：注入完成标记与自动续播，静音并切到 2 倍速。"""
-    driver.execute_script('videoPlay = setInterval(function() {if (video.paused) {video.play();}}, 200);')
-    driver.execute_script('setTimeout(() => clearInterval(videoPlay), 5000)')
-    driver.execute_script('addFinishMark = function() {finished = document.createElement("span"); finished.setAttribute("id", "LetMeFly_Finished"); document.body.appendChild(finished); console.log("Finished");}')
-    driver.execute_script('video.addEventListener("ended", addFinishMark, {once: true});')
-    # 暂停后自动续播；开启了防刷的视频在页面隐藏或失焦时不续播，回到前台后再继续
-    driver.execute_script('''
-        antiBrushing = () => { const p = document.querySelector(".xtplayer"); return !!(p && p.__vue__ && p.__vue__.isAntiBrushing); };
-        resumeVideo = () => { if (video.paused && !video.ended && !(antiBrushing() && (document.hidden || !document.hasFocus()))) { video.play(); } };
-        video.addEventListener("pause", resumeVideo);
-        document.addEventListener("visibilitychange", resumeVideo);
-        window.addEventListener("focus", resumeVideo);
-    ''')
+    """静音并选择 2 倍速，持续修正倍速和续播，直到视频结束。"""
     mute1video()
     change2speed2()
+    driver.execute_script('''
+        const currentVideo = video;
+        let playPending = false;
+        const resumeVideo = () => {
+            if (currentVideo.ended || (currentVideo.duration > 0
+                && currentVideo.currentTime >= currentVideo.duration)) return;
+            currentVideo.muted = true;
+            if (currentVideo.defaultPlaybackRate !== 2) currentVideo.defaultPlaybackRate = 2;
+            if (currentVideo.playbackRate !== 2) currentVideo.playbackRate = 2;
+            if (currentVideo.paused && !playPending) {
+                playPending = true;
+                currentVideo.play().catch(error => console.warn('自动续播失败:', error.message))
+                    .finally(() => { playPending = false; });
+            }
+        };
+        const addFinishMark = () => {
+            clearInterval(window.videoPlay);
+            if (!document.querySelector('#LetMeFly_Finished')) {
+                const finished = document.createElement('span');
+                finished.id = 'LetMeFly_Finished';
+                document.body.appendChild(finished);
+            }
+        };
+        currentVideo.addEventListener('ended', addFinishMark, {once: true});
+        // 自然结束时 pause 先于 ended 派发，延后续播，让结束状态先更新。
+        currentVideo.addEventListener('pause', () => setTimeout(resumeVideo, 0));
+        currentVideo.addEventListener('ratechange', resumeVideo);
+        clearInterval(window.videoPlay);
+        window.videoPlay = setInterval(resumeVideo, 200);
+        if (currentVideo.ended) addFinishMark();
+        else resumeVideo();
+    ''')
     driver.save_screenshot(os.path.join(output_dir(), 'playback.png'))
 
 
-def open_slot(video: WebElement, slots, deferred, course_window):
-    """打开一个视频开始播放并登记到 slots；开启了防刷且还有其他视频在播时关掉，留到之后单独播放。"""
+def open_slot(video: WebElement, slots, course_window):
+    """登记并启动视频；课程页内播放时另开课程列表页，继续安排其他视频。"""
     name = name_of(video)
     handle = open_video(video)
     wait_video()
-    if handle is None:  # 在课程页内播放，播完才能回到列表，只能单独播放
-        anti, exclusive, handle = is_anti_brushing(), True, course_window
-    else:
-        anti = is_anti_brushing()
-        exclusive = anti
-        if anti and slots:
-            print(f'「{name}」开启了防刷，需单独播放，等其他视频播完后再播')
-            deferred.add(name)
-            driver.close()
-            return
-    if anti:
-        print(f'「{name}」开启了防刷，单独播放，播放页需保持在前台')
-    print(f'开始播放: {name}')
+    if handle is None:
+        handle = course_window
+    print(f'开始播放: {name}，正在静音并切换到 2 倍速')
+    # 先登记并写出状态，切倍速要慢慢移动鼠标，可能要几十秒，期间网页控制台也能看到这个视频
+    slots[handle] = {'name': name, 'playback': read_playback()}
+    write_status(slots)
     start_playback()
-    slots[handle] = {'name': name, 'anti': anti, 'exclusive': exclusive,
-                     'in_page': handle == course_window, 'playback': {}}
+    slots[handle]['playback'] = read_playback()
+    write_status(slots)
+    if handle == course_window:
+        driver.switch_to.new_window('tab')
+        course_window = driver.current_window_handle
+        driver.get(COURSE_URL)
+        sleep(3)
+    return course_window
+
+
+def read_playback():
+    return driver.execute_script('return {current_time: video.currentTime, duration: video.duration, paused: video.paused, ended: video.ended, rate: video.playbackRate, muted: video.muted};')
 
 
 def poll_slot(handle, slot):
     """刷新一个视频的播放状态，播完时关闭它并返回 True。"""
     driver.switch_to.window(handle)
-    playback = driver.execute_script('return {current_time: video.currentTime, duration: video.duration, paused: video.paused, ended: video.ended, rate: video.playbackRate, muted: video.muted};')
-    slot['playback'] = playback
-    if not driver.execute_script('return document.querySelector("#LetMeFly_Finished");'):
-        print(f'正在播放: {slot["name"]} | {playback["current_time"] or 0:.0f}/{playback["duration"] or 0:.0f}秒 | {playback["rate"]}倍速')
+    wait_video()
+    playback = slot['playback'] = read_playback()
+    if not playback['ended'] and not driver.execute_script('return document.querySelector("#LetMeFly_Finished");'):
+        current, duration, rate = playback['current_time'] or 0, playback['duration'] or 0, playback['rate'] or 1
+        remaining = int(max(0, duration - current) / rate)
+        print(f'正在播放: {slot["name"]} | {current:.0f}/{duration:.0f}秒 | {rate}倍速 | 还剩约 {remaining // 60} 分 {remaining % 60} 秒')
         return False
     print(f'播放完毕: {slot["name"]}，再等 5 秒')
     sleep(5)  # 再让它播5秒
-    if slot['in_page']:
-        driver.get(COURSE_URL)
-    else:
-        driver.close()
+    driver.close()
     return True
 
 
 def write_status(slots):
     status = {
-        'videos': [dict(slot['playback'], video=slot['name'], anti_brushing=slot['anti'])
+        'videos': [dict(slot['playback'], video=slot['name'])
                    for slot in slots.values()],
         'parallel': PARALLEL,
         'debugger_address': driver.capabilities['goog:chromeOptions']['debuggerAddress'],
@@ -388,10 +432,9 @@ def write_status(slots):
 
 
 def play_all():
-    """在课程页依次打开未完成的视频，最多同时播放 PARALLEL 个；开启了防刷的视频单独播放。"""
+    """依次打开未完成的视频，始终按 PARALLEL 安排多开播放。"""
     course_window = driver.current_window_handle
     slots = {}  # 窗口句柄 -> 正在播放的视频
-    deferred = set()  # 开启了防刷、等其他视频播完再单独播放的视频名
     need_refresh = False  # 有视频播完后要刷新课程页，列表里的完成状态才会更新
     exhausted = False  # 暂时没有可以新开的视频，等有视频播完再找
     while True:
@@ -400,8 +443,7 @@ def play_all():
                 del slots[handle]
                 need_refresh, exhausted = True, False
         write_status(slots)
-        if (len(slots) < PARALLEL and not exhausted
-                and not any(slot['exclusive'] for slot in slots.values())):
+        if len(slots) < PARALLEL and not exhausted:
             activate(course_window)
             if need_refresh:
                 driver.refresh()
@@ -410,9 +452,9 @@ def play_all():
             print('正在寻找未完成的视频，请耐心等待')
             playing = {slot['name'] for slot in slots.values()}
             candidates = [video for video in getAllvideos_notFinished(load_course_items())
-                          if name_of(video) not in playing and not (slots and name_of(video) in deferred)]
+                          if name_of(video) not in playing]
             if candidates:
-                open_slot(candidates[0], slots, deferred, course_window)
+                course_window = open_slot(candidates[0], slots, course_window)
                 continue  # 马上看还能不能再开一个
             if not slots:
                 return
